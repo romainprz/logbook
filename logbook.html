@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Étude Capillaire - Logbook</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/supabase/2.39.3/supabase.min.js"></script>
+</head>
+<body class="bg-gray-50">
+  <div id="app"></div>
+
+  <script>
+    const SUPABASE_URL = 'https://ntuedwxfsjzxvgcpbdqu.supabase.co';
+    const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im50dWVkd3hmc2p6eHZnY3BiZHF1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjUxMzEyMDUsImV4cCI6MjA4MDcwNzIwNX0.UwuFwfga1dXFYkIn0YwfYnnRzELGm87fSA-k9yP2I2c';
+    
+    const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    const state = {
+      view: 'login',
+      currentUser: null,
+      participants: [],
+      entries: [],
+      loading: true,
+      selectedDay: 1,
+      showAddForm: false,
+      formData: {}
+    };
+
+    async function getParticipants() {
+      const result = await db.from('participants').select('*').order('created_at', { ascending: false });
+      if (result.error) throw result.error;
+      return result.data.map(p => ({
+        code: p.code,
+        firstName: p.first_name,
+        lastName: p.last_name,
+        email: p.email,
+        phone: p.phone,
+        startDate: p.start_date
+      }));
+    }
+
+    async function createParticipant(participant) {
+      const result = await db.from('participants').insert([{
+        code: participant.code,
+        first_name: participant.firstName,
+        last_name: participant.lastName,
+        email: participant.email,
+        phone: participant.phone,
+        start_date: participant.startDate
+      }]).select().single();
+      if (result.error) throw result.error;
+      return result.data;
+    }
+
+    async function deleteParticipant(code) {
+      const result = await db.from('participants').delete().eq('code', code);
+      if (result.error) throw result.error;
+    }
+
+    async function getEntries(participantCode) {
+      let query = db.from('entries').select('*').order('day', { ascending: true });
+      if (participantCode) query = query.eq('participant_code', participantCode);
+      
+      const result = await query;
+      if (result.error) throw result.error;
+      
+      return result.data.map(e => ({
+        participantCode: e.participant_code,
+        day: e.day,
+        date: e.entry_date,
+        status: e.status,
+        hasOdor: e.has_odor,
+        odorIntensity: e.odor_intensity,
+        odorCauses: e.odor_causes || [],
+        otherCause: e.other_cause,
+        hasSymptoms: e.has_symptoms,
+        itching: e.itching,
+        irritation: e.irritation,
+        redness: e.redness,
+        dryness: e.dryness,
+        washedHair: e.washed_hair
+      }));
+    }
+
+    async function upsertEntry(entry) {
+      const result = await db.from('entries').upsert({
+        participant_code: entry.participantCode,
+        day: entry.day,
+        entry_date: entry.date,
+        status: entry.status,
+        has_odor: entry.hasOdor,
+        odor_intensity: entry.odorIntensity,
+        odor_causes: entry.odorCauses,
+        other_cause: entry.otherCause,
+        has_symptoms: entry.hasSymptoms,
+        itching: entry.itching,
+        irritation: entry.irritation,
+        redness: entry.redness,
+        dryness: entry.dryness,
+        washed_hair: entry.washedHair
+      }, { onConflict: 'participant_code,day' }).select().single();
+      if (result.error) throw result.error;
+      return result.data;
+    }
+
+    async function loadData() {
+      try {
+        state.loading = true;
+        const parts = await getParticipants();
+        const ents = await getEntries();
+        state.participants = parts;
+        state.entries = ents;
+      } catch (err) {
+        console.error('Error:', err);
+        alert('Erreur de connexion Supabase: ' + err.message);
+      } finally {
+        state.loading = false;
+        render();
+      }
+    }
+
+    function initFormData() {
+      const entry = state.entries.find(e => 
+        e.participantCode === state.currentUser.code && e.day === state.selectedDay
+      );
+      
+      state.formData = entry || {
+        participantCode: state.currentUser.code,
+        day: state.selectedDay,
+        date: new Date().toISOString().split('T')[0],
+        status: 'pending',
+        hasOdor: null,
+        odorIntensity: 1,
+        odorCauses: [],
+        otherCause: '',
+        hasSymptoms: null,
+        itching: 0,
+        irritation: 0,
+        redness: 0,
+        dryness: 0,
+        washedHair: null
+      };
+    }
+
+    window.handleLoginSubmit = function(e) {
+      e.preventDefault();
+      const code = document.getElementById('loginCode').value.trim();
+      if (code === 'ADMIN2024') {
+        state.view = 'admin';
+        render();
+      } else {
+        const participant = state.participants.find(p => p.code === code);
+        if (participant) {
+          state.currentUser = participant;
+          state.view = 'logbook';
+          state.selectedDay = 1;
+          initFormData();
+          render();
+        } else {
+          alert('Code participant invalide');
+        }
+      }
+    };
+
+    window.handleAdminLogin = function() {
+      state.view = 'admin';
+      render();
+    };
+
+    window.toggleAddForm = function() {
+      state.showAddForm = !state.showAddForm;
+      render();
+    };
+
+    window.handleAddParticipantSubmit = async function(e) {
+      e.preventDefault();
+      try {
+        const form = {
+          code: document.getElementById('newCode').value,
+          firstName: document.getElementById('newFirstName').value,
+          lastName: document.getElementById('newLastName').value,
+          email: document.getElementById('newEmail').value,
+          phone: document.getElementById('newPhone').value,
+          startDate: document.getElementById('newStartDate').value
+        };
+        await createParticipant(form);
+        await loadData();
+        state.showAddForm = false;
+        alert('Panéliste créé avec succès!');
+      } catch (err) {
+        alert('Erreur: ' + err.message);
+      }
+    };
+
+    window.handleDeleteParticipant = async function(code) {
+      if (confirm('Supprimer ce panéliste?')) {
+        try {
+          await deleteParticipant(code);
+          await loadData();
+          alert('Panéliste supprimé');
+        } catch (err) {
+          alert('Erreur: ' + err.message);
+        }
+      }
+    };
+
+    window.handleLogout = function() {
+      state.currentUser = null;
+      state.view = 'login';
+      render();
+    };
+
+    window.handleDaySelect = function(day) {
+      state.selectedDay = day;
+      initFormData();
+      render();
+    };
+
+    window.updateFormField = function(field, value) {
+      state.formData[field] = value;
+      render();
+    };
+
+    window.toggleOdorCause = function(cause) {
+      if (state.formData.odorCauses.includes(cause)) {
+        state.formData.odorCauses = state.formData.odorCauses.filter(c => c !== cause);
+      } else {
+        state.formData.odorCauses = [...state.formData.odorCauses, cause];
+      }
+      render();
+    };
+
+    window.handleSaveEntry = async function() {
+      try {
+        await upsertEntry({ ...state.formData, status: 'completed' });
+        await loadData();
+        alert('Données enregistrées avec succès!');
+      } catch (err) {
+        alert('Erreur: ' + err.message);
+      }
+    };
+
+    window.handleViewStats = function() {
+      state.view = 'stats';
+      render();
+    };
+
+    window.handleBackToAdmin = function() {
+      state.view = 'admin';
+      render();
+    };
+
+    function render() {
+      const app = document.getElementById('app');
+      
+      if (state.loading) {
+        app.innerHTML = `
+          <div class="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
+            <div class="text-center">
+              <div class="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-500 mx-auto mb-4"></div>
+              <p class="text-gray-600">Chargement...</p>
+            </div>
+          </div>
+        `;
+        return;
+      }
+
+      if (state.view === 'login') {
+        app.innerHTML = `
+          <div class="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+            <div class="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md">
+              <div class="text-center mb-8">
+                <div class="w-16 h-16 bg-blue-500 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                  </svg>
+                </div>
+                <h1 class="text-3xl font-bold text-gray-800 mb-2">Étude Capillaire</h1>
+                <p class="text-gray-600">Logbook 28 jours</p>
+              </div>
+              <form onsubmit="handleLoginSubmit(event)" class="space-y-4">
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-2">Code Participant</label>
+                  <input type="text" id="loginCode" placeholder="Entrez votre code (ex: P001)" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" required />
+                </div>
+                <button type="submit" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold py-3 rounded-lg">
+                  Se connecter
+                </button>
+              </form>
+              <div class="mt-6 pt-6 border-t border-gray-200">
+                <button onclick="handleAdminLogin()" class="w-full text-sm text-gray-600 hover:text-blue-600">
+                  Accès administrateur →
+                </button>
+              </div>
+            </div>
+          </div>
+        `;
+      } else if (state.view === 'admin') {
+        app.innerHTML = `
+          <div class="min-h-screen bg-gray-50">
+            <div class="bg-white shadow-sm border-b">
+              <div class="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
+                <h1 class="text-2xl font-bold text-gray-800">Administration</h1>
+                <div class="flex gap-2">
+                  <button onclick="handleViewStats()" class="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg">
+                    Statistiques
+                  </button>
+                  <button onclick="handleLogout()" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg">
+                    Déconnexion
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div class="max-w-7xl mx-auto px-4 py-8">
+              <div class="flex justify-between items-center mb-6">
+                <h2 class="text-xl font-semibold">Panélistes (${state.participants.length})</h2>
+                <button onclick="toggleAddForm()" class="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg">
+                  + Nouveau Panéliste
+                </button>
+              </div>
+              ${state.showAddForm ? `
+                <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+                  <h3 class="text-lg font-semibold mb-4">Nouveau Panéliste</h3>
+                  <form onsubmit="handleAddParticipantSubmit(event)" class="grid grid-cols-2 gap-4">
+                    <input type="text" id="newCode" placeholder="Code (ex: P001)" class="px-4 py-2 border rounded-lg" required />
+                    <input type="text" id="newFirstName" placeholder="Prénom" class="px-4 py-2 border rounded-lg" required />
+                    <input type="text" id="newLastName" placeholder="Nom" class="px-4 py-2 border rounded-lg" required />
+                    <input type="email" id="newEmail" placeholder="Email" class="px-4 py-2 border rounded-lg" required />
+                    <input type="tel" id="newPhone" placeholder="Téléphone" class="px-4 py-2 border rounded-lg" />
+                    <input type="date" id="newStartDate" value="${new Date().toISOString().split('T')[0]}" class="px-4 py-2 border rounded-lg" required />
+                    <div class="col-span-2 flex gap-2">
+                      <button type="submit" class="flex-1 bg-blue-500 hover:bg-blue-600 text-white py-2 rounded-lg">Ajouter</button>
+                      <button type="button" onclick="toggleAddForm()" class="px-6 bg-gray-200 hover:bg-gray-300 text-gray-700 py-2 rounded-lg">Annuler</button>
+                    </div>
+                  </form>
+                </div>
+              ` : ''}
+              <div class="grid gap-4">
+                ${state.participants.map(p => `
+                  <div class="bg-white rounded-lg shadow-md p-6 flex justify-between items-center">
+                    <div>
+                      <span class="font-mono font-semibold text-lg text-blue-600">${p.code}</span>
+                      <p class="text-gray-800 font-medium">${p.firstName} ${p.lastName}</p>
+                      <p class="text-sm text-gray-600">${p.email}</p>
+                      ${p.phone ? `<p class="text-sm text-gray-600">${p.phone}</p>` : ''}
+                      <p class="text-sm text-gray-500 mt-1">Début: ${new Date(p.startDate).toLocaleDateString('fr-FR')}</p>
+                    </div>
+                    <button onclick="handleDeleteParticipant('${p.code}')" class="p-2 text-red-500 hover:bg-red-50 rounded-lg">
+                      🗑️
+                    </button>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          </div>
+        `;
+      } else if (state.view === 'logbook') {
+        const userEntries = state.entries.filter(e => e.participantCode === state.currentUser.code);
+        const progress = userEntries.filter(e => e.status === 'completed').length;
+
+        app.innerHTML = `
+          <div class="min-h-screen bg-gray-50">
+            <div class="bg-white shadow-sm border-b">
+              <div class="max-w-4xl mx-auto px-4 py-4 flex justify-between items-center">
+                <div>
+                  <h1 class="text-2xl font-bold text-gray-800">${state.currentUser.firstName} ${state.currentUser.lastName}</h1>
+                  <p class="text-sm text-gray-600">Code: ${state.currentUser.code}</p>
+                </div>
+                <button onclick="handleLogout()" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg">
+                  Déconnexion
+                </button>
+              </div>
+            </div>
+            <div class="max-w-4xl mx-auto px-4 py-6">
+              <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+                <div class="flex justify-between items-center mb-4">
+                  <h2 class="text-lg font-semibold">Progression</h2>
+                  <span class="text-blue-600 font-semibold">${progress} / 28 jours</span>
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-3">
+                  <div class="bg-blue-500 h-3 rounded-full" style="width: ${(progress / 28) * 100}%"></div>
+                </div>
+              </div>
+              <div class="grid grid-cols-7 gap-2 mb-6">
+                ${Array.from({ length: 28 }, (_, i) => i + 1).map(day => {
+                  const entry = userEntries.find(e => e.day === day);
+                  const isCompleted = entry?.status === 'completed';
+                  const isSelected = state.selectedDay === day;
+                  return `
+                    <button onclick="handleDaySelect(${day})" class="aspect-square rounded-lg flex flex-col items-center justify-center border shadow-sm
+                      ${isSelected ? 'bg-blue-500 text-white ring-2 ring-blue-300' : 
+                        isCompleted ? 'bg-green-100 text-green-700 hover:bg-green-200' : 
+                        'bg-white text-gray-700 hover:bg-gray-50'}">
+                      <span class="text-xs font-medium">J${day}</span>
+                      ${isCompleted ? '<span class="text-xs">✓</span>' : ''}
+                    </button>
+                  `;
+                }).join('')}
+              </div>
+              <div class="bg-white rounded-lg shadow-md p-6">
+                <h2 class="text-xl font-bold mb-6">Jour ${state.selectedDay}</h2>
+                <div class="space-y-6">
+                  <div>
+                    <label class="block text-sm font-medium mb-2">Date</label>
+                    <input type="date" value="${state.formData.date}" onchange="updateFormField('date', this.value)" class="w-full px-4 py-2 border rounded-lg" />
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium mb-2">Avez-vous lavé vos cheveux aujourd'hui ?</label>
+                    <div class="flex gap-4">
+                      <button onclick="updateFormField('washedHair', true)" class="flex-1 py-2 rounded-lg border ${state.formData.washedHair === true ? 'bg-blue-500 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'}">Oui</button>
+                      <button onclick="updateFormField('washedHair', false)" class="flex-1 py-2 rounded-lg border ${state.formData.washedHair === false ? 'bg-blue-500 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'}">Non</button>
+                    </div>
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium mb-2">Avez-vous constaté une odeur ?</label>
+                    <div class="flex gap-4">
+                      <button onclick="updateFormField('hasOdor', true)" class="flex-1 py-2 rounded-lg border ${state.formData.hasOdor === true ? 'bg-blue-500 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'}">Oui</button>
+                      <button onclick="updateFormField('hasOdor', false)" class="flex-1 py-2 rounded-lg border ${state.formData.hasOdor === false ? 'bg-blue-500 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'}">Non</button>
+                    </div>
+                  </div>
+                  ${state.formData.hasOdor ? `
+                    <div>
+                      <label class="block text-sm font-medium mb-2">Intensité (1-10)</label>
+                      <input type="range" min="1" max="10" value="${state.formData.odorIntensity || 1}" oninput="updateFormField('odorIntensity', parseInt(this.value))" class="w-full" />
+                      <div class="text-center text-2xl font-bold text-blue-600">${state.formData.odorIntensity || 1}</div>
+                    </div>
+                    <div>
+                      <label class="block text-sm font-medium mb-2">Causes possibles</label>
+                      ${['Transpiration', 'Pollution', 'Fumée', 'Autre'].map(cause => `
+                        <label class="flex items-center gap-2 mb-2">
+                          <input type="checkbox" ${state.formData.odorCauses.includes(cause) ? 'checked' : ''} onchange="toggleOdorCause('${cause}')" class="w-4 h-4" />
+                          <span>${cause}</span>
+                        </label>
+                      `).join('')}
+                      ${state.formData.odorCauses.includes('Autre') ? `
+                        <input type="text" value="${state.formData.otherCause || ''}" onchange="updateFormField('otherCause', this.value)" placeholder="Précisez..." class="w-full mt-2 px-4 py-2 border rounded-lg" />
+                      ` : ''}
+                    </div>
+                  ` : ''}
+                  <div>
+                    <label class="block text-sm font-medium mb-2">Avez-vous ressenti des symptômes ?</label>
+                    <div class="flex gap-4">
+                      <button onclick="updateFormField('hasSymptoms', true)" class="flex-1 py-2 rounded-lg border ${state.formData.hasSymptoms === true ? 'bg-blue-500 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'}">Oui</button>
+                      <button onclick="updateFormField('hasSymptoms', false)" class="flex-1 py-2 rounded-lg border ${state.formData.hasSymptoms === false ? 'bg-blue-500 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'}">Non</button>
+                    </div>
+                  </div>
+                  ${state.formData.hasSymptoms ? `
+                    ${[
+                      {key: 'itching', label: 'Démangeaisons'},
+                      {key: 'irritation', label: 'Irritation'},
+                      {key: 'redness', label: 'Rougeurs'},
+                      {key: 'dryness', label: 'Sécheresse'}
+                    ].map(s => `
+                      <div>
+                        <label class="block text-sm font-medium mb-2">${s.label} (0-10)</label>
+                        <input type="range" min="0" max="10" value="${state.formData[s.key]}" oninput="updateFormField('${s.key}', parseInt(this.value))" class="w-full" />
+                        <div class="text-center text-lg font-semibold text-blue-600">${state.formData[s.key]}</div>
+                      </div>
+                    `).join('')}
+                  ` : ''}
+                </div>
+                <button onclick="handleSaveEntry()" class="w-full mt-6 bg-blue-500 hover:bg-blue-600 text-white font-semibold py-3 rounded-lg">
+                  Enregistrer
+                </button>
+              </div>
+            </div>
+          </div>
+        `;
+      } else if (state.view === 'stats') {
+        const stats = state.participants.map(p => {
+          const userEntries = state.entries.filter(e => e.participantCode === p.code);
+          const completed = userEntries.filter(e => e.status === 'completed').length;
+          return { ...p, completed };
+        });
+
+        app.innerHTML = `
+          <div class="min-h-screen bg-gray-50">
+            <div class="bg-white shadow-sm border-b">
+              <div class="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
+                <h1 class="text-2xl font-bold text-gray-800">Statistiques Globales</h1>
+                <button onclick="handleBackToAdmin()" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg">
+                  Retour
+                </button>
+              </div>
+            </div>
+            <div class="max-w-7xl mx-auto px-4 py-8">
+              <div class="grid gap-4">
+                ${stats.map(p => `
+                  <div class="bg-white rounded-lg shadow-md p-6">
+                    <div class="flex justify-between items-start mb-4">
+                      <div>
+                        <h3 class="font-semibold text-lg">${p.firstName} ${p.lastName}</h3>
+                        <p class="text-sm text-gray-600">${p.code}</p>
+                      </div>
+                      <div class="text-right">
+                        <div class="text-2xl font-bold text-blue-600">${p.completed}/28</div>
+                        <div class="text-sm text-gray-600">${Math.round((p.completed / 28) * 100)}%</div>
+                      </div>
+                    </div>
+                    <div class="w-full bg-gray-200 rounded-full h-2">
+                      <div class="bg-blue-500 h-2 rounded-full" style="width: ${(p.completed / 28) * 100}%"></div>
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          </div>
+        `;
+      }
+    }
+
+    loadData();
+  </script>
+</body>
+</html>
