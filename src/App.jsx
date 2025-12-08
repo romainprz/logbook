@@ -1,67 +1,97 @@
+// src/App.jsx - VERSION CORRIGÉE AVEC SUPABASE
 import React, { useState, useEffect } from 'react';
-import { Calendar, Plus, Download, Settings, Users, BarChart3, Mail, Check, AlertCircle, ChevronRight, X, Upload, Copy, FileUp, Trash2, Edit2 } from 'lucide-react';
-
-// Simulated storage functions (replace with Supabase in production)
-const storage = {
-  participants: [
-    { code: '1234', firstName: 'Marie', lastName: 'Dupont', email: 'marie@example.com', phone: '0612345678', startDate: '2025-12-06' },
-    { code: '5678', firstName: 'Jean', lastName: 'Martin', email: 'jean@example.com', phone: '0623456789', startDate: '2025-12-06' }
-  ],
-  entries: [
-    { participantCode: '1234', day: 1, date: '2025-12-06', status: 'complete', hasOdor: true, odorIntensity: 7, odorCauses: ['Transpiration excessive'], otherCause: '', hasSymptoms: true, itching: 5, irritation: 3, redness: 2, dryness: 4, washedHair: false },
-    { participantCode: '1234', day: 2, date: '2025-12-07', status: 'complete', hasOdor: false, odorIntensity: 5, odorCauses: [], otherCause: '', hasSymptoms: false, itching: 0, irritation: 0, redness: 0, dryness: 0, washedHair: true }
-  ],
-  settings: {
-    studyStartDate: '2025-12-06',
-    allowRetroactive: true,
-    autoComplete: true,
-    emailSender: 'etude@example.com',
-    emailName: 'Équipe Recherche',
-    companyName: 'Lab Capillaire',
-    primaryColor: '#3b82f6',
-    showProgressBar: true,
-    emailSubject: 'Votre accès à l\'étude capillaire 28 jours',
-    emailIntro: 'Bonjour, merci de participer à notre étude capillaire.',
-    emailInstructions: [
-      'Connectez-vous chaque jour avec votre code à 4 chiffres',
-      'Remplissez le questionnaire quotidien (2-3 minutes)',
-      'Vous pouvez rattraper les jours manqués'
-    ],
-    emailSignature: 'L\'équipe de recherche',
-    emailClosing: 'Pour toute question, répondez à cet email.'
-  }
-};
+import { Calendar, Plus, Download, Settings, Users, BarChart3, Mail, Check, AlertCircle, ChevronRight, X, Upload, Trash2 } from 'lucide-react';
+import { 
+  getParticipants, 
+  getParticipantByCode, 
+  getEntries, 
+  createParticipant,
+  deleteParticipant,
+  upsertEntry,
+  getSettings
+} from './lib/supabase';
 
 const App = () => {
-  const [view, setView] = useState('login');
-  const [currentUser, setCurrentUser] = useState(null);
+  const [view, setView] = useState(() => {
+    // Récupérer la vue depuis localStorage
+    return localStorage.getItem('currentView') || 'login';
+  });
+  const [currentUser, setCurrentUser] = useState(() => {
+    // Récupérer l'utilisateur depuis localStorage
+    const saved = localStorage.getItem('currentUser');
+    return saved ? JSON.parse(saved) : null;
+  });
   const [participants, setParticipants] = useState([]);
   const [entries, setEntries] = useState([]);
-  const [settings, setSettings] = useState(storage.settings);
+  const [settings, setSettings] = useState(null);
   const [selectedDay, setSelectedDay] = useState(null);
   const [adminTab, setAdminTab] = useState('dashboard');
+  const [loading, setLoading] = useState(true);
 
+  // Charger les données au démarrage
   useEffect(() => {
-    setParticipants(storage.participants);
-    setEntries(storage.entries);
+    loadData();
   }, []);
+
+  // Sauvegarder la vue actuelle
+  useEffect(() => {
+    localStorage.setItem('currentView', view);
+  }, [view]);
+
+  // Sauvegarder l'utilisateur actuel
+  useEffect(() => {
+    if (currentUser) {
+      localStorage.setItem('currentUser', JSON.stringify(currentUser));
+    } else {
+      localStorage.removeItem('currentUser');
+    }
+  }, [currentUser]);
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      const [participantsData, entriesData, settingsData] = await Promise.all([
+        getParticipants(),
+        getEntries(),
+        getSettings()
+      ]);
+      
+      setParticipants(participantsData);
+      setEntries(entriesData);
+      setSettings(settingsData);
+    } catch (error) {
+      console.error('Error loading data:', error);
+      alert('Erreur de chargement des données');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Login Component
   const LoginScreen = () => {
     const [code, setCode] = useState('');
     const [error, setError] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
 
-    const handleLogin = () => {
-      if (code === '9999') {
-        setView('admin');
-        return;
-      }
-      const participant = participants.find(p => p.code === code);
-      if (participant) {
+    const handleLogin = async () => {
+      setIsLoading(true);
+      setError('');
+
+      try {
+        if (code === '9999') {
+          setView('admin');
+          setIsLoading(false);
+          return;
+        }
+
+        const participant = await getParticipantByCode(code);
         setCurrentUser(participant);
         setView('participant');
-      } else {
+      } catch (error) {
+        console.error('Login error:', error);
         setError('Code invalide. Vérifiez votre code à 4 chiffres.');
+      } finally {
+        setIsLoading(false);
       }
     };
 
@@ -89,6 +119,7 @@ const App = () => {
                 onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
                 className="w-full px-4 py-3 text-2xl text-center border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none tracking-widest"
                 placeholder="••••"
+                disabled={isLoading}
               />
               {error && (
                 <p className="text-red-500 text-sm mt-2 flex items-center gap-1">
@@ -100,9 +131,10 @@ const App = () => {
 
             <button
               onClick={handleLogin}
-              className="w-full bg-blue-500 text-white py-3 rounded-lg font-medium hover:bg-blue-600 transition"
+              disabled={isLoading}
+              className="w-full bg-blue-500 text-white py-3 rounded-lg font-medium hover:bg-blue-600 transition disabled:opacity-50"
             >
-              Se connecter
+              {isLoading ? 'Connexion...' : 'Se connecter'}
             </button>
 
             <div className="text-center text-sm text-gray-500 mt-4">
@@ -148,6 +180,18 @@ const App = () => {
       current: <ChevronRight className="w-6 h-6" />,
       missed: <AlertCircle className="w-6 h-6" />,
       future: null
+    };
+
+    const handleSaveEntry = async (entry) => {
+      try {
+        await upsertEntry(entry);
+        await loadData();
+        alert('✅ Questionnaire enregistré avec succès !');
+        setSelectedDay(null);
+      } catch (error) {
+        console.error('Error saving entry:', error);
+        alert('❌ Erreur lors de la sauvegarde');
+      }
     };
 
     return (
@@ -238,22 +282,19 @@ const App = () => {
             participant={currentUser}
             onClose={() => setSelectedDay(null)}
             existingEntry={entries.find(e => e.participantCode === currentUser.code && e.day === selectedDay)}
-            onSave={(newEntry) => {
-              const existingIndex = entries.findIndex(e => e.participantCode === currentUser.code && e.day === selectedDay);
-              if (existingIndex >= 0) {
-                entries[existingIndex] = newEntry;
-              } else {
-                entries.push(newEntry);
-              }
-              setEntries([...entries]);
-            }}
+            onSave={handleSaveEntry}
           />
         )}
       </div>
     );
   };
 
-  // Daily Questionnaire
+  // Suite dans le prochain fichier...
+  // (DailyQuestionnaire, AdminPanel, etc.)
+
+  // COPIEZ CETTE PARTIE DANS App.jsx APRÈS ParticipantDashboard
+
+  // Daily Questionnaire Component
   const DailyQuestionnaire = ({ day, participant, onClose, existingEntry, onSave }) => {
     const [formData, setFormData] = useState(existingEntry || {
       hasOdor: null,
@@ -268,6 +309,8 @@ const App = () => {
       washedHair: null
     });
 
+    const [isSaving, setIsSaving] = useState(false);
+
     useEffect(() => {
       const timer = setInterval(() => {
         console.log('Auto-saving draft...');
@@ -275,7 +318,8 @@ const App = () => {
       return () => clearInterval(timer);
     }, []);
 
-    const handleSubmit = () => {
+    const handleSubmit = async () => {
+      setIsSaving(true);
       const entry = {
         participantCode: participant.code,
         day,
@@ -284,9 +328,8 @@ const App = () => {
         ...formData
       };
       
-      onSave(entry);
-      alert('✅ Questionnaire enregistré avec succès !');
-      onClose();
+      await onSave(entry);
+      setIsSaving(false);
     };
 
     const odorCausesOptions = [
@@ -484,14 +527,16 @@ const App = () => {
             <button
               onClick={onClose}
               className="px-6 py-3 border-2 border-gray-300 rounded-lg font-medium hover:bg-gray-100"
+              disabled={isSaving}
             >
               Annuler
             </button>
             <button
               onClick={handleSubmit}
-              className="px-6 py-3 bg-blue-500 text-white rounded-lg font-medium hover:bg-blue-600"
+              disabled={isSaving}
+              className="px-6 py-3 bg-blue-500 text-white rounded-lg font-medium hover:bg-blue-600 disabled:opacity-50"
             >
-              Soumettre
+              {isSaving ? 'Enregistrement...' : 'Soumettre'}
             </button>
           </div>
         </div>
@@ -499,7 +544,9 @@ const App = () => {
     );
   };
 
-  // Admin Panel
+  // COPIEZ CETTE PARTIE DANS App.jsx APRÈS DailyQuestionnaire
+
+  // Admin Panel Component
   const AdminPanel = () => {
     const [showAddModal, setShowAddModal] = useState(false);
     const [showImportModal, setShowImportModal] = useState(false);
@@ -514,135 +561,6 @@ const App = () => {
         : 0
     };
 
-    // CSV Import Modal
-    const CSVImportModal = () => {
-      const [csvText, setCsvText] = useState('');
-      const [importResult, setImportResult] = useState(null);
-
-      const downloadTemplate = () => {
-        const template = 'prenom,nom,email,telephone,code,date_debut\nMarie,Dupont,marie@example.com,0612345678,1234,2025-12-06\nJean,Martin,jean@example.com,0623456789,5678,2025-12-06';
-        const blob = new Blob([template], { type: 'text/csv' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'template_participants.csv';
-        a.click();
-      };
-
-      const handleImport = () => {
-        const lines = csvText.trim().split('\n');
-        if (lines.length < 2) {
-          alert('❌ Fichier CSV vide ou invalide');
-          return;
-        }
-
-        const headers = lines[0].split(',').map(h => h.trim());
-        let created = 0, ignored = 0, errors = 0;
-        const newParticipants = [...participants];
-
-        for (let i = 1; i < lines.length; i++) {
-          const values = lines[i].split(',').map(v => v.trim());
-          
-          if (values.length !== headers.length) {
-            errors++;
-            continue;
-          }
-
-          const participant = {
-            firstName: values[0],
-            lastName: values[1],
-            email: values[2],
-            phone: values[3],
-            code: values[4],
-            startDate: values[5] || settings.studyStartDate
-          };
-
-          if (newParticipants.some(p => p.code === participant.code)) {
-            ignored++;
-            continue;
-          }
-
-          if (!participant.code || participant.code.length !== 4) {
-            errors++;
-            continue;
-          }
-
-          newParticipants.push(participant);
-          created++;
-        }
-
-        setParticipants(newParticipants);
-        storage.participants = newParticipants;
-        setImportResult({ created, ignored, errors });
-      };
-
-      return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full">
-            <div className="p-6 border-b flex justify-between items-center">
-              <h3 className="text-2xl font-bold">Import CSV Massif</h3>
-              <button onClick={() => { setShowImportModal(false); setImportResult(null); }} className="text-gray-500 hover:text-gray-700">
-                <X className="w-6 h-6" />
-              </button>
-            </div>
-
-            <div className="p-6 space-y-4">
-              <div>
-                <button
-                  onClick={downloadTemplate}
-                  className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 flex items-center gap-2"
-                >
-                  <Download className="w-4 h-4" />
-                  Télécharger Template CSV
-                </button>
-                <p className="text-sm text-gray-600 mt-2">
-                  Format: prenom, nom, email, telephone, code (4 chiffres), date_debut
-                </p>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Collez votre CSV ici
-                </label>
-                <textarea
-                  value={csvText}
-                  onChange={(e) => setCsvText(e.target.value)}
-                  className="w-full h-48 px-4 py-2 border border-gray-300 rounded-lg font-mono text-sm"
-                  placeholder="prenom,nom,email,telephone,code,date_debut&#10;Marie,Dupont,marie@example.com,0612345678,1234,2025-12-06"
-                />
-              </div>
-
-              {importResult && (
-                <div className="p-4 bg-blue-50 rounded-lg">
-                  <p className="font-semibold mb-2">Résultat de l'import :</p>
-                  <ul className="space-y-1 text-sm">
-                    <li className="text-green-600">✅ {importResult.created} créés</li>
-                    <li className="text-orange-600">⚠️ {importResult.ignored} ignorés (doublons)</li>
-                    <li className="text-red-600">❌ {importResult.errors} erreurs</li>
-                  </ul>
-                </div>
-              )}
-            </div>
-
-            <div className="p-6 border-t bg-gray-50 flex justify-end gap-3">
-              <button
-                onClick={() => { setShowImportModal(false); setImportResult(null); }}
-                className="px-6 py-3 border-2 border-gray-300 rounded-lg font-medium hover:bg-gray-100"
-              >
-                Fermer
-              </button>
-              <button
-                onClick={handleImport}
-                className="px-6 py-3 bg-blue-500 text-white rounded-lg font-medium hover:bg-blue-600"
-              >
-                Importer
-              </button>
-            </div>
-          </div>
-        </div>
-      );
-    };
-
     // Add Participant Modal
     const AddParticipantModal = () => {
       const [newParticipant, setNewParticipant] = useState({
@@ -651,10 +569,11 @@ const App = () => {
         email: '',
         phone: '',
         code: '',
-        startDate: settings.studyStartDate
+        startDate: settings?.studyStartDate || '2025-12-06'
       });
+      const [isSaving, setIsSaving] = useState(false);
 
-      const handleAdd = () => {
+      const handleAdd = async () => {
         if (!newParticipant.code || newParticipant.code.length !== 4) {
           alert('❌ Le code doit contenir 4 chiffres');
           return;
@@ -665,11 +584,18 @@ const App = () => {
           return;
         }
 
-        const updated = [...participants, newParticipant];
-        setParticipants(updated);
-        storage.participants = updated;
-        alert('✅ Panéliste ajouté avec succès !');
-        setShowAddModal(false);
+        setIsSaving(true);
+        try {
+          await createParticipant(newParticipant);
+          await loadData();
+          alert('✅ Panéliste ajouté avec succès !');
+          setShowAddModal(false);
+        } catch (error) {
+          console.error('Error adding participant:', error);
+          alert('❌ Erreur lors de l\'ajout');
+        } finally {
+          setIsSaving(false);
+        }
       };
 
       return (
@@ -731,14 +657,143 @@ const App = () => {
               <button
                 onClick={() => setShowAddModal(false)}
                 className="px-6 py-3 border-2 border-gray-300 rounded-lg font-medium hover:bg-gray-100"
+                disabled={isSaving}
               >
                 Annuler
               </button>
               <button
                 onClick={handleAdd}
-                className="px-6 py-3 bg-blue-500 text-white rounded-lg font-medium hover:bg-blue-600"
+                disabled={isSaving}
+                className="px-6 py-3 bg-blue-500 text-white rounded-lg font-medium hover:bg-blue-600 disabled:opacity-50"
               >
-                Ajouter
+                {isSaving ? 'Ajout...' : 'Ajouter'}
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    };
+
+    // CSV Import Modal (version simplifiée)
+    const CSVImportModal = () => {
+      const [csvText, setCsvText] = useState('');
+      const [importResult, setImportResult] = useState(null);
+      const [isImporting, setIsImporting] = useState(false);
+
+      const downloadTemplate = () => {
+        const template = 'prenom,nom,email,telephone,code,date_debut\nMarie,Dupont,marie@example.com,0612345678,1234,2025-12-06';
+        const blob = new Blob([template], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'template_participants.csv';
+        a.click();
+      };
+
+      const handleImport = async () => {
+        const lines = csvText.trim().split('\n');
+        if (lines.length < 2) {
+          alert('❌ Fichier CSV vide ou invalide');
+          return;
+        }
+
+        setIsImporting(true);
+        let created = 0, ignored = 0, errors = 0;
+
+        for (let i = 1; i < lines.length; i++) {
+          const values = lines[i].split(',').map(v => v.trim());
+          
+          if (values.length < 6) {
+            errors++;
+            continue;
+          }
+
+          const participant = {
+            firstName: values[0],
+            lastName: values[1],
+            email: values[2],
+            phone: values[3],
+            code: values[4],
+            startDate: values[5] || settings.studyStartDate
+          };
+
+          if (participants.some(p => p.code === participant.code)) {
+            ignored++;
+            continue;
+          }
+
+          try {
+            await createParticipant(participant);
+            created++;
+          } catch (error) {
+            errors++;
+          }
+        }
+
+        await loadData();
+        setImportResult({ created, ignored, errors });
+        setIsImporting(false);
+      };
+
+      return (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full">
+            <div className="p-6 border-b flex justify-between items-center">
+              <h3 className="text-2xl font-bold">Import CSV Massif</h3>
+              <button onClick={() => { setShowImportModal(false); setImportResult(null); }} className="text-gray-500 hover:text-gray-700">
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div>
+                <button
+                  onClick={downloadTemplate}
+                  className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 flex items-center gap-2"
+                >
+                  <Download className="w-4 h-4" />
+                  Télécharger Template CSV
+                </button>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Collez votre CSV ici
+                </label>
+                <textarea
+                  value={csvText}
+                  onChange={(e) => setCsvText(e.target.value)}
+                  className="w-full h-48 px-4 py-2 border border-gray-300 rounded-lg font-mono text-sm"
+                  placeholder="prenom,nom,email,telephone,code,date_debut&#10;Marie,Dupont,marie@example.com,0612345678,1234,2025-12-06"
+                />
+              </div>
+
+              {importResult && (
+                <div className="p-4 bg-blue-50 rounded-lg">
+                  <p className="font-semibold mb-2">Résultat de l'import :</p>
+                  <ul className="space-y-1 text-sm">
+                    <li className="text-green-600">✅ {importResult.created} créés</li>
+                    <li className="text-orange-600">⚠️ {importResult.ignored} ignorés (doublons)</li>
+                    <li className="text-red-600">❌ {importResult.errors} erreurs</li>
+                  </ul>
+                </div>
+              )}
+            </div>
+
+            <div className="p-6 border-t bg-gray-50 flex justify-end gap-3">
+              <button
+                onClick={() => { setShowImportModal(false); setImportResult(null); }}
+                className="px-6 py-3 border-2 border-gray-300 rounded-lg font-medium hover:bg-gray-100"
+                disabled={isImporting}
+              >
+                Fermer
+              </button>
+              <button
+                onClick={handleImport}
+                disabled={isImporting}
+                className="px-6 py-3 bg-blue-500 text-white rounded-lg font-medium hover:bg-blue-600 disabled:opacity-50"
+              >
+                {isImporting ? 'Import en cours...' : 'Importer'}
               </button>
             </div>
           </div>
@@ -802,352 +857,26 @@ const App = () => {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `export_etude_capillaire_${new Date().toISOString().split('T')[0]}.csv`;
+      a.download = `export_etude_${new Date().toISOString().split('T')[0]}.csv`;
       a.click();
     };
 
-    return (
-      <div className="min-h-screen bg-gray-50">
-        <div className="bg-white shadow">
-          <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
-            <h1 className="text-2xl font-bold text-gray-900">Admin Dashboard</h1>
-            <button
-              onClick={() => { setView('login'); setCurrentUser(null); }}
-              className="text-gray-600 hover:text-gray-900"
-            >
-              Déconnexion
-            </button>
-          </div>
-        </div>
-
-        <div className="max-w-7xl mx-auto px-4 py-6">
-          <div className="flex gap-2 mb-6 overflow-x-auto">
-            {['dashboard', 'participants', 'data', 'settings'].map(tab => (
-              <button
-                key={tab}
-                onClick={() => setAdminTab(tab)}
-                className={`px-4 py-2 rounded-lg font-medium whitespace-nowrap ${
-                  adminTab === tab ? 'bg-blue-500 text-white' : 'bg-white text-gray-700 hover:bg-gray-100'
-                }`}
-              >
-                {tab === 'dashboard' && <><BarChart3 className="w-4 h-4 inline mr-2" />Dashboard</>}
-                {tab === 'participants' && <><Users className="w-4 h-4 inline mr-2" />Panélistes</>}
-                {tab === 'data' && <><Download className="w-4 h-4 inline mr-2" />Données</>}
-                {tab === 'settings' && <><Settings className="w-4 h-4 inline mr-2" />Paramètres</>}
-              </button>
-            ))}
-          </div>
-
-          {adminTab === 'dashboard' && (
-            <div className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div className="bg-white p-6 rounded-lg shadow">
-                  <div className="text-gray-600 text-sm mb-1">Total Panélistes</div>
-                  <div className="text-3xl font-bold text-blue-600">{stats.totalParticipants}</div>
-                </div>
-                <div className="bg-white p-6 rounded-lg shadow">
-                  <div className="text-gray-600 text-sm mb-1">Actifs</div>
-                  <div className="text-3xl font-bold text-green-600">{stats.activeParticipants}</div>
-                </div>
-                <div className="bg-white p-6 rounded-lg shadow">
-                  <div className="text-gray-600 text-sm mb-1">Entrées Totales</div>
-                  <div className="text-3xl font-bold text-purple-600">{stats.totalEntries}</div>
-                </div>
-                <div className="bg-white p-6 rounded-lg shadow">
-                  <div className="text-gray-600 text-sm mb-1">Taux Complétion</div>
-                  <div className="text-3xl font-bold text-orange-600">{stats.completionRate}%</div>
-                </div>
-              </div>
-
-              <div className="bg-white p-6 rounded-lg shadow">
-                <h3 className="text-xl font-bold mb-4">Aperçu Rapide</h3>
-                <p className="text-gray-600 mb-4">
-                  L'étude compte {participants.length} participants avec {entries.length} entrées enregistrées.
-                </p>
-                <div className="space-y-2">
-                  <p className="text-sm">• Utilisez l'onglet <strong>Panélistes</strong> pour ajouter ou importer des participants</p>
-                  <p className="text-sm">• Utilisez l'onglet <strong>Données</strong> pour exporter les résultats</p>
-                  <p className="text-sm">• Utilisez l'onglet <strong>Paramètres</strong> pour configurer l'étude</p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {adminTab === 'participants' && (
-            <div className="bg-white rounded-lg shadow p-6">
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-xl font-bold">Gestion des Panélistes</h2>
-                <div className="flex gap-2">
-                  <button 
-                    onClick={() => setShowImportModal(true)}
-                    className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 flex items-center gap-2"
-                  >
-                    <Upload className="w-4 h-4" />
-                    Import CSV
-                  </button>
-                  <button 
-                    onClick={() => setShowAddModal(true)}
-                    className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 flex items-center gap-2"
-                  >
-                    <Plus className="w-4 h-4" />
-                    Nouveau
-                  </button>
-                </div>
-              </div>
-
-              {participants.length === 0 ? (
-                <div className="text-center py-12 text-gray-500">
-                  <Users className="w-16 h-16 mx-auto mb-4 opacity-50" />
-                  <p>Aucun panéliste. Ajoutez-en un ou importez un fichier CSV.</p>
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-4 py-3 text-left text-sm font-semibold">Code</th>
-                        <th className="px-4 py-3 text-left text-sm font-semibold">Nom</th>
-                        <th className="px-4 py-3 text-left text-sm font-semibold">Email</th>
-                        <th className="px-4 py-3 text-left text-sm font-semibold">Téléphone</th>
-                        <th className="px-4 py-3 text-left text-sm font-semibold">Progression</th>
-                        <th className="px-4 py-3 text-left text-sm font-semibold">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y">
-                      {participants.map(p => {
-                        const userEntries = entries.filter(e => e.participantCode === p.code && e.status === 'complete');
-                        const progress = Math.round((userEntries.length / 28) * 100);
-                        
-                        return (
-                          <tr key={p.code} className="hover:bg-gray-50">
-                            <td className="px-4 py-3 font-mono font-bold">{p.code}</td>
-                            <td className="px-4 py-3">{p.firstName} {p.lastName}</td>
-                            <td className="px-4 py-3 text-sm text-gray-600">{p.email}</td>
-                            <td className="px-4 py-3 text-sm text-gray-600">{p.phone}</td>
-                            <td className="px-4 py-3">
-                              <div className="flex items-center gap-2">
-                                <div className="flex-1 bg-gray-200 rounded-full h-2 max-w-32">
-                                  <div className="bg-blue-500 h-2 rounded-full" style={{ width: `${progress}%` }} />
-                                </div>
-                                <span className="text-sm font-semibold">{userEntries.length}/28</span>
-                              </div>
-                            </td>
-                            <td className="px-4 py-3">
-                              <button 
-                                onClick={() => alert('Fonctionnalité email à venir')}
-                                className="text-blue-600 hover:text-blue-800 mr-3"
-                                title="Envoyer email"
-                              >
-                                <Mail className="w-4 h-4" />
-                              </button>
-                              <button 
-                                onClick={() => {
-                                  if (confirm('Supprimer ce panéliste et toutes ses données ?')) {
-                                    setParticipants(participants.filter(part => part.code !== p.code));
-                                    setEntries(entries.filter(e => e.participantCode !== p.code));
-                                  }
-                                }}
-                                className="text-red-600 hover:text-red-800"
-                                title="Supprimer"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          )}
-
-          {adminTab === 'data' && (
-            <div className="bg-white rounded-lg shadow p-6">
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-xl font-bold">Export des Données</h2>
-                <div className="flex gap-3">
-                  <select
-                    value={filterParticipant}
-                    onChange={(e) => setFilterParticipant(e.target.value)}
-                    className="px-4 py-2 border border-gray-300 rounded-lg"
-                  >
-                    <option value="all">Tous les panélistes</option>
-                    {participants.map(p => (
-                      <option key={p.code} value={p.code}>
-                        {p.firstName} {p.lastName} ({p.code})
-                      </option>
-                    ))}
-                  </select>
-                  <button 
-                    onClick={exportToCSV}
-                    className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 flex items-center gap-2"
-                  >
-                    <Download className="w-4 h-4" />
-                    Export CSV
-                  </button>
-                </div>
-              </div>
-
-              {entries.length === 0 ? (
-                <div className="text-center py-12 text-gray-500">
-                  <Download className="w-16 h-16 mx-auto mb-4 opacity-50" />
-                  <p>Aucune donnée disponible pour l'export</p>
-                </div>
-              ) : (
-                <div className="overflow-x-auto" style={{ maxHeight: '500px' }}>
-                  <table className="w-full text-sm">
-                    <thead className="bg-gray-50 sticky top-0">
-                      <tr>
-                        <th className="px-3 py-2 text-left">Code</th>
-                        <th className="px-3 py-2 text-left">Nom</th>
-                        <th className="px-3 py-2 text-left">Jour</th>
-                        <th className="px-3 py-2 text-left">Date</th>
-                        <th className="px-3 py-2 text-left">Odeur</th>
-                        <th className="px-3 py-2 text-left">Intensité</th>
-                        <th className="px-3 py-2 text-left">Transpir.</th>
-                        <th className="px-3 py-2 text-left">Foulard</th>
-                        <th className="px-3 py-2 text-left">Shampoing</th>
-                        <th className="px-3 py-2 text-left">Sébum</th>
-                        <th className="px-3 py-2 text-left">Hormones</th>
-                        <th className="px-3 py-2 text-left">Produit</th>
-                        <th className="px-3 py-2 text-left">Autre</th>
-                        <th className="px-3 py-2 text-left">Symptômes</th>
-                        <th className="px-3 py-2 text-left">Démang.</th>
-                        <th className="px-3 py-2 text-left">Irritat.</th>
-                        <th className="px-3 py-2 text-left">Rougeurs</th>
-                        <th className="px-3 py-2 text-left">Sécher.</th>
-                        <th className="px-3 py-2 text-left">Lavage</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y">
-                      {(filterParticipant === 'all' ? entries : entries.filter(e => e.participantCode === filterParticipant))
-                        .map((entry, idx) => {
-                          const participant = participants.find(p => p.code === entry.participantCode);
-                          return (
-                            <tr key={idx} className="hover:bg-gray-50">
-                              <td className="px-3 py-2 font-mono">{entry.participantCode}</td>
-                              <td className="px-3 py-2">{participant?.firstName} {participant?.lastName}</td>
-                              <td className="px-3 py-2">{entry.day}</td>
-                              <td className="px-3 py-2">{new Date(entry.date).toLocaleDateString('fr-FR')}</td>
-                              <td className="px-3 py-2">{entry.hasOdor ? '✓' : '✗'}</td>
-                              <td className="px-3 py-2">{entry.hasOdor ? entry.odorIntensity : '-'}</td>
-                              <td className="px-3 py-2">{entry.odorCauses.includes('Transpiration excessive') ? '✓' : '✗'}</td>
-                              <td className="px-3 py-2">{entry.odorCauses.includes('Port de foulard/hijab') ? '✓' : '✗'}</td>
-                              <td className="px-3 py-2">{entry.odorCauses.includes('Shampooing peu fréquent') ? '✓' : '✗'}</td>
-                              <td className="px-3 py-2">{entry.odorCauses.includes('Excès de sébum') ? '✓' : '✗'}</td>
-                              <td className="px-3 py-2">{entry.odorCauses.includes('Changements hormonaux') ? '✓' : '✗'}</td>
-                              <td className="px-3 py-2">{entry.odorCauses.includes('Produit inapproprié') ? '✓' : '✗'}</td>
-                              <td className="px-3 py-2">{entry.odorCauses.includes('Autre') ? entry.otherCause : '-'}</td>
-                              <td className="px-3 py-2">{entry.hasSymptoms ? '✓' : '✗'}</td>
-                              <td className="px-3 py-2">{entry.hasSymptoms ? entry.itching : '-'}</td>
-                              <td className="px-3 py-2">{entry.hasSymptoms ? entry.irritation : '-'}</td>
-                              <td className="px-3 py-2">{entry.hasSymptoms ? entry.redness : '-'}</td>
-                              <td className="px-3 py-2">{entry.hasSymptoms ? entry.dryness : '-'}</td>
-                              <td className="px-3 py-2">{entry.washedHair ? '✓' : '✗'}</td>
-                            </tr>
-                          );
-                        })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-
-              <div className="mt-6 p-4 bg-blue-50 rounded-lg">
-                <p className="text-sm text-gray-700">
-                  <strong>Astuce :</strong> Vous pouvez sélectionner tout le tableau (Ctrl+A), copier (Ctrl+C) 
-                  et coller directement dans Excel ou Google Sheets pour une analyse rapide.
-                </p>
-              </div>
-            </div>
-          )}
-
-          {adminTab === 'settings' && (
-            <div className="bg-white rounded-lg shadow p-6">
-              <h2 className="text-xl font-bold mb-6">Paramètres de l'Étude</h2>
-              
-              <div className="space-y-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Date de début par défaut
-                  </label>
-                  <input
-                    type="date"
-                    value={settings.studyStartDate}
-                    onChange={(e) => setSettings({ ...settings, studyStartDate: e.target.value })}
-                    className="px-4 py-2 border border-gray-300 rounded-lg"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Nom de l'entreprise
-                  </label>
-                  <input
-                    type="text"
-                    value={settings.companyName}
-                    onChange={(e) => setSettings({ ...settings, companyName: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Couleur principale
-                  </label>
-                  <input
-                    type="color"
-                    value={settings.primaryColor}
-                    onChange={(e) => setSettings({ ...settings, primaryColor: e.target.value })}
-                    className="h-10 w-20"
-                  />
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <input
-                    type="checkbox"
-                    checked={settings.showProgressBar}
-                    onChange={(e) => setSettings({ ...settings, showProgressBar: e.target.checked })}
-                    className="w-5 h-5"
-                  />
-                  <label className="text-sm font-medium text-gray-700">
-                    Afficher la barre de progression
-                  </label>
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <input
-                    type="checkbox"
-                    checked={settings.allowRetroactive}
-                    onChange={(e) => setSettings({ ...settings, allowRetroactive: e.target.checked })}
-                    className="w-5 h-5"
-                  />
-                  <label className="text-sm font-medium text-gray-700">
-                    Autoriser les entrées rétroactives
-                  </label>
-                </div>
-
-                <button 
-                  onClick={() => {
-                    storage.settings = settings;
-                    alert('✅ Paramètres enregistrés');
-                  }}
-                  className="px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
-                >
-                  Enregistrer les paramètres
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {showAddModal && <AddParticipantModal />}
-        {showImportModal && <CSVImportModal />}
-      </div>
-    );
+    // RENDER DU ADMIN PANEL DANS LE FICHIER FINAL
   };
 
+  // LOADING STATE
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <p className="text-gray-600">Chargement...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // MAIN RENDER
   if (view === 'login') return <LoginScreen />;
   if (view === 'participant') return <ParticipantDashboard />;
   if (view === 'admin') return <AdminPanel />;
