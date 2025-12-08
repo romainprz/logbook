@@ -1,3 +1,4 @@
+// src/lib/supabase.js - VERSION CORRIGÉE
 import { createClient } from '@supabase/supabase-js'
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
@@ -16,7 +17,13 @@ export const getParticipants = async () => {
     .select('*')
     .order('created_at', { ascending: false })
   
-  if (error) throw error
+  if (error) {
+    console.error('Error fetching participants:', error)
+    throw error
+  }
+  
+  if (!data) return []
+  
   return data.map(p => ({
     code: p.code,
     firstName: p.first_name,
@@ -32,16 +39,25 @@ export const getParticipantByCode = async (code) => {
     .from('participants')
     .select('*')
     .eq('code', code)
-    .single()
   
-  if (error) throw error
+  if (error) {
+    console.error('Error fetching participant:', error)
+    throw error
+  }
+  
+  // Vérifier si on a trouvé un participant
+  if (!data || data.length === 0) {
+    throw new Error('Participant not found')
+  }
+  
+  const participant = data[0]
   return {
-    code: data.code,
-    firstName: data.first_name,
-    lastName: data.last_name,
-    email: data.email,
-    phone: data.phone,
-    startDate: data.start_date
+    code: participant.code,
+    firstName: participant.first_name,
+    lastName: participant.last_name,
+    email: participant.email,
+    phone: participant.phone,
+    startDate: participant.start_date
   }
 }
 
@@ -57,10 +73,13 @@ export const createParticipant = async (participant) => {
       start_date: participant.startDate
     }])
     .select()
-    .single()
   
-  if (error) throw error
-  return data
+  if (error) {
+    console.error('Error creating participant:', error)
+    throw error
+  }
+  
+  return data[0]
 }
 
 export const deleteParticipant = async (code) => {
@@ -69,7 +88,10 @@ export const deleteParticipant = async (code) => {
     .delete()
     .eq('code', code)
   
-  if (error) throw error
+  if (error) {
+    console.error('Error deleting participant:', error)
+    throw error
+  }
 }
 
 // === ENTRIES ===
@@ -85,7 +107,13 @@ export const getEntries = async (participantCode = null) => {
   
   const { data, error } = await query
   
-  if (error) throw error
+  if (error) {
+    console.error('Error fetching entries:', error)
+    throw error
+  }
+  
+  if (!data) return []
+  
   return data.map(e => ({
     participantCode: e.participant_code,
     day: e.day,
@@ -126,10 +154,13 @@ export const upsertEntry = async (entry) => {
       onConflict: 'participant_code,day'
     })
     .select()
-    .single()
   
-  if (error) throw error
-  return data
+  if (error) {
+    console.error('Error upserting entry:', error)
+    throw error
+  }
+  
+  return data[0]
 }
 
 // === SETTINGS ===
@@ -138,12 +169,43 @@ export const getSettings = async () => {
     .from('settings')
     .select('*')
   
-  if (error) throw error
+  if (error) {
+    console.error('Error fetching settings:', error)
+    throw error
+  }
   
+  if (!data || data.length === 0) {
+    // Retourner des paramètres par défaut si la table est vide
+    return {
+      studyStartDate: '2025-12-06',
+      allowRetroactive: true,
+      autoComplete: true,
+      companyName: 'Lab Capillaire',
+      primaryColor: '#3b82f6',
+      showProgressBar: true
+    }
+  }
+  
+  // Transformer en objet simple
   const settings = {}
   data.forEach(row => {
     Object.assign(settings, row.value)
   })
   
   return settings
+}
+
+export const updateSettings = async (key, value) => {
+  const { data, error } = await supabase
+    .from('settings')
+    .update({ value })
+    .eq('key', key)
+    .select()
+  
+  if (error) {
+    console.error('Error updating settings:', error)
+    throw error
+  }
+  
+  return data[0]
 }
