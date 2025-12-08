@@ -87,7 +87,7 @@ const App = () => {
         setCurrentUser(participant);
         setView('participant');
       } catch (error) {
-        setLoginError('Code invalide. Vérifiez votre code à 4 chiffres.');
+        setLoginError('Invalid code. Please check your 4-digit code.');
       } finally {
         setIsLogging(false);
       }
@@ -100,14 +100,14 @@ const App = () => {
             <div className="w-16 h-16 bg-blue-500 rounded-full flex items-center justify-center mx-auto mb-4">
               <Calendar className="w-8 h-8 text-white" />
             </div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Étude Capillaire</h1>
-            <p className="text-gray-600">Logbook 28 jours</p>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">Scalp Study</h1>
+            <p className="text-gray-600">28-Day Logbook</p>
           </div>
 
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Code Participant (4 chiffres)
+                Participant Code (4 digits)
               </label>
               <input
                 type="text"
@@ -132,12 +132,8 @@ const App = () => {
               disabled={isLogging || !code || code.length !== 4}
               className="w-full bg-blue-500 text-white py-3 rounded-lg font-medium hover:bg-blue-600 transition disabled:opacity-50"
             >
-              {isLogging ? 'Connexion...' : 'Se connecter'}
+              {isLogging ? 'Logging in...' : 'Log In'}
             </button>
-
-            <div className="text-center text-sm text-gray-500 mt-4">
-              <p>Administrateurs : code 9999</p>
-            </div>
           </div>
         </div>
       </div>
@@ -163,7 +159,7 @@ const App = () => {
     const getDayDate = (day) => {
       const date = new Date(startDate);
       date.setDate(date.getDate() + day - 1);
-      return date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+      return date.toLocaleDateString('en-US', { day: 'numeric', month: 'short' });
     };
 
     const statusStyles = {
@@ -185,22 +181,35 @@ const App = () => {
         <div className="bg-white shadow">
           <div className="max-w-6xl mx-auto px-4 py-4 flex justify-between items-center">
             <div>
-              <h2 className="text-xl font-bold text-gray-900">Bonjour, {currentUser.firstName}</h2>
+              <h2 className="text-xl font-bold text-gray-900">Hello, {currentUser.firstName}</h2>
               <p className="text-sm text-gray-600">Code: {currentUser.code}</p>
             </div>
             <button
               onClick={() => { setView('login'); setCurrentUser(null); }}
               className="text-gray-600 hover:text-gray-900"
             >
-              Déconnexion
+              Log Out
             </button>
           </div>
         </div>
 
         <div className="max-w-6xl mx-auto px-4 py-8">
+          {/* Instructions Banner */}
+          <div className="bg-blue-50 border-l-4 border-blue-500 p-6 mb-6 rounded-lg">
+            <h3 className="text-lg font-bold text-blue-900 mb-3">📋 Study Instructions</h3>
+            <ul className="space-y-2 text-sm text-blue-800">
+              <li><strong>Phase 1:</strong> 28 days of assessing your scalp odor (before starting the lotion on 3 January 2026).</li>
+              <li><strong>When?</strong> Every evening, at the end of the day, ideally before washing (Do not change your usual hair care routine, shampoo frequency).</li>
+              <li><strong>How?</strong> Touch your scalp to assess the odor, or ask someone close to you for help.</li>
+              <li><strong>Format:</strong> Digital or paper logbook — feel free to switch anytime, as long as you keep a record every day.</li>
+              <li><strong>Goal:</strong> One entry per day.</li>
+              <li className="font-semibold pt-2">✨ Thank you for staying consistent!</li>
+            </ul>
+          </div>
+
           <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-2xl font-bold text-gray-900">Progression</h3>
+              <h3 className="text-2xl font-bold text-gray-900">Progress</h3>
               <span className="text-3xl font-bold text-blue-600">{completedDays}/28</span>
             </div>
             {settings?.showProgressBar && (
@@ -214,7 +223,7 @@ const App = () => {
           </div>
 
           <div className="bg-white rounded-lg shadow-lg p-6">
-            <h3 className="text-xl font-bold text-gray-900 mb-4">Calendrier 28 jours</h3>
+            <h3 className="text-xl font-bold text-gray-900 mb-4">28-Day Calendar</h3>
             <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-3">
               {Array.from({ length: 28 }, (_, i) => i + 1).map(day => {
                 const status = getDayStatus(day);
@@ -232,7 +241,7 @@ const App = () => {
                     <div className="flex flex-col items-center gap-2">
                       {statusIcons[status]}
                       <div className="text-center">
-                        <div className="font-bold">Jour {day}</div>
+                        <div className="font-bold">Day {day}</div>
                         <div className="text-xs">{getDayDate(day)}</div>
                       </div>
                     </div>
@@ -244,19 +253,19 @@ const App = () => {
             <div className="mt-6 flex flex-wrap gap-4 text-sm">
               <div className="flex items-center gap-2">
                 <div className="w-4 h-4 bg-green-400 rounded"></div>
-                <span>Complété</span>
+                <span>Completed</span>
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-4 h-4 bg-blue-400 rounded"></div>
-                <span>Aujourd'hui</span>
+                <span>Today</span>
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-4 h-4 bg-orange-400 rounded"></div>
-                <span>Manqué</span>
+                <span>Missed</span>
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-4 h-4 bg-gray-300 rounded"></div>
-                <span>À venir</span>
+                <span>Upcoming</span>
               </div>
             </div>
           </div>
@@ -303,29 +312,29 @@ const App = () => {
         
         await upsertEntry(entry);
         await loadData();
-        alert('✅ Questionnaire enregistré avec succès !');
+        alert('✅ Questionnaire saved successfully!');
         onClose();
       } catch (error) {
-        alert('❌ Erreur lors de la sauvegarde');
+        alert('❌ Error saving questionnaire');
       } finally {
         setIsSaving(false);
       }
     };
 
     const odorCausesOptions = [
-      'Transpiration excessive',
-      'Port de foulard/hijab',
-      'Shampooing peu fréquent',
-      'Excès de sébum',
-      'Changements hormonaux',
-      'Produit inapproprié'
+      'Excessive perspiration',
+      'Wearing headscarf/hijab',
+      'Infrequent shampooing',
+      'Excess sebum',
+      'Hormonal changes',
+      'Inappropriate product'
     ];
 
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
         <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full my-8">
           <div className="p-6 border-b flex justify-between items-center">
-            <h3 className="text-2xl font-bold">Jour {day} - Questionnaire</h3>
+            <h3 className="text-2xl font-bold">Day {day} - Questionnaire</h3>
             <button onClick={onClose} className="text-gray-500 hover:text-gray-700">
               <X className="w-6 h-6" />
             </button>
@@ -334,7 +343,7 @@ const App = () => {
           <div className="p-6 space-y-6 max-h-96 overflow-y-auto">
             <div>
               <label className="block text-lg font-semibold mb-3">
-                1. Avez-vous détecté une odeur désagréable aujourd'hui ?
+                1. Did you detect an unpleasant scalp odor today?
               </label>
               <div className="flex gap-4">
                 <button
@@ -343,7 +352,7 @@ const App = () => {
                     formData.hasOdor === true ? 'bg-blue-500 text-white border-blue-500' : 'border-gray-300'
                   }`}
                 >
-                  Oui
+                  Yes
                 </button>
                 <button
                   onClick={() => setFormData({ ...formData, hasOdor: false })}
@@ -351,7 +360,7 @@ const App = () => {
                     formData.hasOdor === false ? 'bg-blue-500 text-white border-blue-500' : 'border-gray-300'
                   }`}
                 >
-                  Non
+                  No
                 </button>
               </div>
             </div>
@@ -360,7 +369,7 @@ const App = () => {
               <>
                 <div>
                   <label className="block text-lg font-semibold mb-3">
-                    2. Intensité de l'odeur : {formData.odorIntensity}/10
+                    2. Odor intensity: {formData.odorIntensity}/10
                   </label>
                   <input
                     type="range"
@@ -371,14 +380,14 @@ const App = () => {
                     className="w-full"
                   />
                   <div className="flex justify-between text-sm text-gray-600 mt-1">
-                    <span>Faible</span>
-                    <span>Forte</span>
+                    <span>Weak</span>
+                    <span>Strong</span>
                   </div>
                 </div>
 
                 <div>
                   <label className="block text-lg font-semibold mb-3">
-                    3. Causes possibles (choix multiples)
+                    3. Possible causes of the odor (multiple choice)
                   </label>
                   <div className="space-y-2">
                     {odorCausesOptions.map(cause => (
@@ -401,24 +410,24 @@ const App = () => {
                     <div className="flex items-start gap-3 p-3 border rounded-lg">
                       <input
                         type="checkbox"
-                        checked={formData.odorCauses.includes('Autre')}
+                        checked={formData.odorCauses.includes('Other')}
                         onChange={(e) => {
                           if (e.target.checked) {
-                            setFormData({ ...formData, odorCauses: [...formData.odorCauses, 'Autre'] });
+                            setFormData({ ...formData, odorCauses: [...formData.odorCauses, 'Other'] });
                           } else {
-                            setFormData({ ...formData, odorCauses: formData.odorCauses.filter(c => c !== 'Autre'), otherCause: '' });
+                            setFormData({ ...formData, odorCauses: formData.odorCauses.filter(c => c !== 'Other'), otherCause: '' });
                           }
                         }}
                         className="w-5 h-5 mt-1"
                       />
                       <div className="flex-1">
-                        <span className="block mb-2">Autre</span>
-                        {formData.odorCauses.includes('Autre') && (
+                        <span className="block mb-2">Other</span>
+                        {formData.odorCauses.includes('Other') && (
                           <input
                             type="text"
                             value={formData.otherCause}
                             onChange={(e) => setFormData({ ...formData, otherCause: e.target.value })}
-                            placeholder="Précisez..."
+                            placeholder="Please specify..."
                             className="w-full px-3 py-2 border rounded"
                           />
                         )}
@@ -429,7 +438,7 @@ const App = () => {
 
                 <div>
                   <label className="block text-lg font-semibold mb-3">
-                    4. Symptômes associés ?
+                    4. Associated symptoms?
                   </label>
                   <div className="flex gap-4 mb-4">
                     <button
@@ -438,7 +447,7 @@ const App = () => {
                         formData.hasSymptoms === true ? 'bg-blue-500 text-white border-blue-500' : 'border-gray-300'
                       }`}
                     >
-                      Oui
+                      Yes
                     </button>
                     <button
                       onClick={() => setFormData({ ...formData, hasSymptoms: false })}
@@ -446,17 +455,17 @@ const App = () => {
                         formData.hasSymptoms === false ? 'bg-blue-500 text-white border-blue-500' : 'border-gray-300'
                       }`}
                     >
-                      Non
+                      No
                     </button>
                   </div>
 
                   {formData.hasSymptoms === true && (
                     <div className="space-y-4 pl-4 border-l-4 border-blue-200">
                       {[
-                        { key: 'itching', label: 'Démangeaisons' },
+                        { key: 'itching', label: 'Itching' },
                         { key: 'irritation', label: 'Irritation' },
-                        { key: 'redness', label: 'Rougeurs' },
-                        { key: 'dryness', label: 'Sécheresse/desquamation' }
+                        { key: 'redness', label: 'Redness' },
+                        { key: 'dryness', label: 'Dryness/Flaking' }
                       ].map(symptom => (
                         <div key={symptom.key}>
                           <label className="block font-medium mb-2">
@@ -480,7 +489,7 @@ const App = () => {
 
             <div>
               <label className="block text-lg font-semibold mb-3">
-                5. Avez-vous lavé vos cheveux aujourd'hui ?
+                5. Did you wash your hair today?
               </label>
               <div className="flex gap-4">
                 <button
@@ -489,7 +498,7 @@ const App = () => {
                     formData.washedHair === true ? 'bg-blue-500 text-white border-blue-500' : 'border-gray-300'
                   }`}
                 >
-                  Oui
+                  Yes
                 </button>
                 <button
                   onClick={() => setFormData({ ...formData, washedHair: false })}
@@ -497,7 +506,7 @@ const App = () => {
                     formData.washedHair === false ? 'bg-blue-500 text-white border-blue-500' : 'border-gray-300'
                   }`}
                 >
-                  Non
+                  No
                 </button>
               </div>
             </div>
@@ -509,20 +518,22 @@ const App = () => {
               className="px-6 py-3 border-2 border-gray-300 rounded-lg font-medium hover:bg-gray-100"
               disabled={isSaving}
             >
-              Annuler
+              Cancel
             </button>
             <button
               onClick={handleSubmit}
               disabled={isSaving}
               className="px-6 py-3 bg-blue-500 text-white rounded-lg font-medium hover:bg-blue-600 disabled:opacity-50"
             >
-              {isSaving ? 'Enregistrement...' : 'Soumettre'}
+              {isSaving ? 'Saving...' : 'Submit'}
             </button>
           </div>
         </div>
       </div>
     );
   };
+
+  // ADMIN PANEL - Suite dans le prochain message (fichier trop long)
 
   // ADMIN PANEL - Suite dans le prochain message (fichier trop long)
 
