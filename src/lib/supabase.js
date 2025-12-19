@@ -99,7 +99,8 @@ export const getEntries = async (participantCode = null) => {
   let query = supabase
     .from('entries')
     .select('*')
-    .order('day', { ascending: true })
+    .order('entry_date', { ascending: false }) // plus fiable que day
+    .range(0, 5000) // ⬅️ FIX CRITIQUE
   
   if (participantCode) {
     query = query.eq('participant_code', participantCode)
@@ -131,6 +132,7 @@ export const getEntries = async (participantCode = null) => {
     washedHair: e.washed_hair
   }))
 }
+
 
 export const upsertEntry = async (entry) => {
   const { data, error } = await supabase
