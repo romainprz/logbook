@@ -24,8 +24,7 @@
       loading: true,
       selectedDay: 1,
       showAddForm: false,
-      formData: {},
-      filterParticipant: 'all'
+      formData: {}
     };
 
     async function getParticipants() {
@@ -144,23 +143,6 @@
       };
     }
 
-    function translateCause(cause) {
-      const translations = {
-        'Excessive perspiration': 'Transpiration',
-        'Wearing headscarf/hijab': 'Foulard',
-        'Infrequent shampooing': 'Shampooing rare',
-        'Excess sebum': 'Sébum',
-        'Hormonal changes': 'Hormones',
-        'Inappropriate product': 'Produit',
-        'Transpiration': 'Transpiration',
-        'Pollution': 'Pollution',
-        'Fumée': 'Fumée',
-        'Other': 'Autre',
-        'Autre': 'Autre'
-      };
-      return translations[cause] || cause;
-    }
-
     window.handleLoginSubmit = function(e) {
       e.preventDefault();
       const code = document.getElementById('loginCode').value.trim();
@@ -264,19 +246,8 @@
       render();
     };
 
-    window.handleViewLogbookEntries = function() {
-      state.view = 'logbook-entries';
-      state.filterParticipant = 'all';
-      render();
-    };
-
     window.handleBackToAdmin = function() {
       state.view = 'admin';
-      render();
-    };
-
-    window.updateFilter = function(code) {
-      state.filterParticipant = code;
       render();
     };
 
@@ -332,11 +303,8 @@
               <div class="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
                 <h1 class="text-2xl font-bold text-gray-800">Administration</h1>
                 <div class="flex gap-2">
-                  <button onclick="handleViewLogbookEntries()" class="px-4 py-2 bg-purple-500 hover:bg-purple-600 text-white rounded-lg">
-                    📋 Logbook
-                  </button>
                   <button onclick="handleViewStats()" class="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg">
-                    📊 Statistiques
+                    Statistiques
                   </button>
                   <button onclick="handleLogout()" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg">
                     Déconnexion
@@ -383,135 +351,6 @@
                     </button>
                   </div>
                 `).join('')}
-              </div>
-            </div>
-          </div>
-        `;
-      } else if (state.view === 'logbook-entries') {
-        const filteredEntries = state.entries
-          .filter(e => state.filterParticipant === 'all' || e.participantCode === state.filterParticipant)
-          .sort((a, b) => {
-            if (a.participantCode !== b.participantCode) {
-              return a.participantCode.localeCompare(b.participantCode);
-            }
-            return a.day - b.day;
-          });
-
-        const withOdor = filteredEntries.filter(e => e.hasOdor).length;
-        const withoutOdor = filteredEntries.filter(e => !e.hasOdor).length;
-
-        app.innerHTML = `
-          <div class="min-h-screen bg-gray-50">
-            <div class="bg-white shadow-sm border-b">
-              <div class="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
-                <h1 class="text-2xl font-bold text-gray-800">📋 Entrées Logbook</h1>
-                <button onclick="handleBackToAdmin()" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg">
-                  ← Retour
-                </button>
-              </div>
-            </div>
-            <div class="max-w-7xl mx-auto px-4 py-8">
-              <div class="bg-white rounded-lg shadow-md p-6">
-                <div class="flex justify-between items-center mb-6">
-                  <h2 class="text-xl font-semibold">Filtrer par panéliste</h2>
-                  <select onchange="updateFilter(this.value)" class="px-4 py-2 border border-gray-300 rounded-lg">
-                    <option value="all" ${state.filterParticipant === 'all' ? 'selected' : ''}>Tous les panélistes</option>
-                    ${state.participants.map(p => `
-                      <option value="${p.code}" ${state.filterParticipant === p.code ? 'selected' : ''}>
-                        ${p.firstName} ${p.lastName} (${p.code})
-                      </option>
-                    `).join('')}
-                  </select>
-                </div>
-
-                ${filteredEntries.length === 0 ? `
-                  <div class="text-center py-12 text-gray-500">
-                    <svg class="w-16 h-16 mx-auto mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-                    </svg>
-                    <p>Aucune entrée enregistrée.</p>
-                  </div>
-                ` : `
-                  <div class="overflow-x-auto">
-                    <table class="w-full text-sm">
-                      <thead class="bg-gray-50">
-                        <tr>
-                          <th class="px-3 py-2 text-left font-semibold">Code</th>
-                          <th class="px-3 py-2 text-left font-semibold">Nom</th>
-                          <th class="px-3 py-2 text-left font-semibold">Jour</th>
-                          <th class="px-3 py-2 text-left font-semibold">Date</th>
-                          <th class="px-3 py-2 text-left font-semibold">Odeur</th>
-                          <th class="px-3 py-2 text-left font-semibold">Intensité</th>
-                          <th class="px-3 py-2 text-left font-semibold">Causes</th>
-                          <th class="px-3 py-2 text-left font-semibold">Symptômes</th>
-                          <th class="px-3 py-2 text-left font-semibold">Cheveux lavés</th>
-                        </tr>
-                      </thead>
-                      <tbody class="divide-y">
-                        ${filteredEntries.map(entry => {
-                          const participant = state.participants.find(p => p.code === entry.participantCode);
-                          return `
-                            <tr class="hover:bg-gray-50">
-                              <td class="px-3 py-2 font-mono">${entry.participantCode}</td>
-                              <td class="px-3 py-2">
-                                ${participant ? `${participant.firstName} ${participant.lastName}` : '-'}
-                              </td>
-                              <td class="px-3 py-2 font-semibold">${entry.day}</td>
-                              <td class="px-3 py-2 text-gray-600">
-                                ${new Date(entry.date).toLocaleDateString('fr-FR')}
-                              </td>
-                              <td class="px-3 py-2">
-                                ${entry.hasOdor ? 
-                                  '<span class="px-2 py-1 bg-red-100 text-red-800 rounded text-xs">Oui</span>' : 
-                                  '<span class="px-2 py-1 bg-green-100 text-green-800 rounded text-xs">Non</span>'
-                                }
-                              </td>
-                              <td class="px-3 py-2">
-                                ${entry.hasOdor ? `<span class="font-semibold">${entry.odorIntensity}/10</span>` : '-'}
-                              </td>
-                              <td class="px-3 py-2 max-w-xs">
-                                ${entry.hasOdor && entry.odorCauses && entry.odorCauses.length > 0 ? 
-                                  `<div class="text-xs space-y-1">
-                                    ${entry.odorCauses.map(cause => 
-                                      `<div class="truncate">• ${translateCause(cause)}${cause === 'Other' || cause === 'Autre' ? (entry.otherCause ? ': ' + entry.otherCause : '') : ''}</div>`
-                                    ).join('')}
-                                  </div>` : '-'
-                                }
-                              </td>
-                              <td class="px-3 py-2">
-                                ${entry.hasSymptoms ? 
-                                  `<div class="text-xs">
-                                    ${entry.itching > 0 ? `<div>Démangeaisons: ${entry.itching}/10</div>` : ''}
-                                    ${entry.irritation > 0 ? `<div>Irritation: ${entry.irritation}/10</div>` : ''}
-                                    ${entry.redness > 0 ? `<div>Rougeurs: ${entry.redness}/10</div>` : ''}
-                                    ${entry.dryness > 0 ? `<div>Sécheresse: ${entry.dryness}/10</div>` : ''}
-                                  </div>` : 
-                                  '<span class="text-gray-400">Non</span>'
-                                }
-                              </td>
-                              <td class="px-3 py-2">
-                                ${entry.washedHair ? 
-                                  '<span class="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs">Oui</span>' : 
-                                  '<span class="px-2 py-1 bg-gray-100 text-gray-600 rounded text-xs">Non</span>'
-                                }
-                              </td>
-                            </tr>
-                          `;
-                        }).join('')}
-                      </tbody>
-                    </table>
-                    
-                    <div class="mt-4 text-sm text-gray-600 flex justify-between items-center pt-4 border-t">
-                      <div>
-                        Total: <strong>${filteredEntries.length}</strong> entrées
-                      </div>
-                      <div class="flex gap-4">
-                        <span>Avec odeur: <strong class="text-red-600">${withOdor}</strong></span>
-                        <span>Sans odeur: <strong class="text-green-600">${withoutOdor}</strong></span>
-                      </div>
-                    </div>
-                  </div>
-                `}
               </div>
             </div>
           </div>
