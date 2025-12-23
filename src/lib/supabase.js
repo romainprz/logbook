@@ -96,28 +96,47 @@ export const deleteParticipant = async (code) => {
 
 // === ENTRIES ===
 export const getEntries = async (participantCode = null) => {
-  // FIXED: Remove .range() to load ALL entries without pagination
-  let query = supabase
-    .from('entries')
-    .select('*', { count: 'exact' }) // Add count to see total
-    .order('entry_date', { ascending: false })
+  // FIXED: Fetch ALL entries by paginating through results
+  let allData = []
+  let from = 0
+  const pageSize = 1000
+  let hasMore = true
   
-  if (participantCode) {
-    query = query.eq('participant_code', participantCode)
+  while (hasMore) {
+    let query = supabase
+      .from('entries')
+      .select('*', { count: 'exact' })
+      .order('entry_date', { ascending: false })
+      .range(from, from + pageSize - 1)
+    
+    if (participantCode) {
+      query = query.eq('participant_code', participantCode)
+    }
+    
+    const { data, error, count } = await query
+    
+    if (error) {
+      console.error('Error fetching entries:', error)
+      throw error
+    }
+    
+    if (data && data.length > 0) {
+      allData = [...allData, ...data]
+      from += pageSize
+      hasMore = data.length === pageSize
+    } else {
+      hasMore = false
+    }
+    
+    // Log progress on first iteration
+    if (from === pageSize) {
+      console.log(`📊 Loading entries: ${allData.length}/${count} (paginating...)`)
+    }
   }
   
-  const { data, error, count } = await query
+  console.log(`✅ Loaded ALL ${allData.length} entries from Supabase`)
   
-  if (error) {
-    console.error('Error fetching entries:', error)
-    throw error
-  }
-  
-  console.log(`✅ Loaded ${data?.length || 0} entries from Supabase (total count: ${count})`)
-  
-  if (!data) return []
-  
-  return data.map(e => ({
+  return allData.map(e => ({
     participantCode: e.participant_code,
     day: e.day,
     date: e.entry_date,
