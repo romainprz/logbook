@@ -96,22 +96,24 @@ export const deleteParticipant = async (code) => {
 
 // === ENTRIES ===
 export const getEntries = async (participantCode = null) => {
+  // FIXED: Remove .range() to load ALL entries without pagination
   let query = supabase
     .from('entries')
-    .select('*')
-    .order('entry_date', { ascending: false }) // plus fiable que day
-    .range(0, 5000) // ⬅️ FIX CRITIQUE
+    .select('*', { count: 'exact' }) // Add count to see total
+    .order('entry_date', { ascending: false })
   
   if (participantCode) {
     query = query.eq('participant_code', participantCode)
   }
   
-  const { data, error } = await query
+  const { data, error, count } = await query
   
   if (error) {
     console.error('Error fetching entries:', error)
     throw error
   }
+  
+  console.log(`✅ Loaded ${data?.length || 0} entries from Supabase (total count: ${count})`)
   
   if (!data) return []
   
@@ -119,7 +121,7 @@ export const getEntries = async (participantCode = null) => {
     participantCode: e.participant_code,
     day: e.day,
     date: e.entry_date,
-    status: e.status,
+    status: e.status || 'complete', // Default to 'complete' if undefined
     hasOdor: e.has_odor,
     odorIntensity: e.odor_intensity,
     odorCauses: e.odor_causes || [],
@@ -141,7 +143,7 @@ export const upsertEntry = async (entry) => {
       participant_code: entry.participantCode,
       day: entry.day,
       entry_date: entry.date,
-      status: entry.status,
+      status: 'complete', // Always set to 'complete' when saving
       has_odor: entry.hasOdor,
       odor_intensity: entry.odorIntensity,
       odor_causes: entry.odorCauses,
