@@ -146,7 +146,16 @@ const App = () => {
     const completedDays = userEntries.filter(e => e.status === 'complete').length;
     const today = new Date();
     const startDate = new Date(currentUser.startDate || settings?.studyStartDate || '2025-12-06');
-    const daysSinceStart = Math.floor((today - startDate) / (1000 * 60 * 60 * 24)) + 1;
+    
+    // Calculer combien de jours se sont écoulés depuis le début
+    // mais avec une limite maximale jusqu'au 1er février 2026
+    const endDate = new Date('2026-02-01');
+    const actualDaysSinceStart = Math.floor((today - startDate) / (1000 * 60 * 60 * 24)) + 1;
+    const maxDaysUntilEnd = Math.floor((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1;
+    
+    // Si on est avant le 1er février, utiliser les jours réels
+    // Si on est après, limiter à la date de fin
+    const daysSinceStart = today <= endDate ? actualDaysSinceStart : maxDaysUntilEnd;
 
     const getDayStatus = (day) => {
       const entry = userEntries.find(e => e.day === day);
@@ -198,7 +207,7 @@ const App = () => {
           <div className="bg-blue-50 border-l-4 border-blue-500 p-6 mb-6 rounded-lg">
             <h3 className="text-lg font-bold text-blue-900 mb-3">📋 Study Instructions</h3>
             <ul className="space-y-2 text-sm text-blue-800">
-              <li><strong>Phase 1:</strong> 28 days of assessing your scalp odor (before starting the lotion on 3 January 2026).</li>
+              <li><strong>Phase 1:</strong> 57 days of assessing your scalp odor (December 6, 2025 - February 1, 2026).</li>
               <li><strong>When?</strong> Every evening, at the end of the day, ideally before washing (Do not change your usual hair care routine, shampoo frequency).</li>
               <li><strong>How?</strong> Touch your scalp to assess the odor, or ask someone close to you for help.</li>
               <li><strong>Format:</strong> Digital or paper logbook — feel free to switch anytime, as long as you keep a record every day.</li>
@@ -210,22 +219,22 @@ const App = () => {
           <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-2xl font-bold text-gray-900">Progress</h3>
-              <span className="text-3xl font-bold text-blue-600">{completedDays}/28</span>
+              <span className="text-3xl font-bold text-blue-600">{completedDays}/57</span>
             </div>
             {settings?.showProgressBar && (
               <div className="w-full bg-gray-200 rounded-full h-4">
                 <div
                   className="bg-blue-500 h-4 rounded-full transition-all"
-                  style={{ width: `${(completedDays / 28) * 100}%` }}
+                  style={{ width: `${(completedDays / 57) * 100}%` }}
                 />
               </div>
             )}
           </div>
 
           <div className="bg-white rounded-lg shadow-lg p-6">
-            <h3 className="text-xl font-bold text-gray-900 mb-4">28-Day Calendar</h3>
+            <h3 className="text-xl font-bold text-gray-900 mb-4">57-Day Calendar</h3>
             <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-3">
-              {Array.from({ length: 28 }, (_, i) => i + 1).map(day => {
+              {Array.from({ length: 57 }, (_, i) => i + 1).map(day => {
                 const status = getDayStatus(day);
                 const isClickable = status !== 'future';
                 
@@ -533,13 +542,7 @@ const App = () => {
     );
   };
 
-  // ADMIN PANEL - Suite dans le prochain message (fichier trop long)
-
-  // ADMIN PANEL - Suite dans le prochain message (fichier trop long)
-
-  // COPIEZ CETTE PARTIE DANS App.jsx APRÈS DailyQuestionnaire
-
-  // ADMIN PANEL
+// ADMIN PANEL
   const AdminPanel = () => {
     const [showAddModal, setShowAddModal] = useState(false);
     const [showImportModal, setShowImportModal] = useState(false);
@@ -550,7 +553,7 @@ const App = () => {
       activeParticipants: participants.filter(p => entries.some(e => e.participantCode === p.code)).length,
       totalEntries: entries.length,
       completionRate: participants.length > 0 
-        ? Math.round((entries.filter(e => e.status === 'complete').length / (participants.length * 28)) * 100)
+        ? Math.round((entries.filter(e => e.status === 'complete').length / (participants.length * 57)) * 100)
         : 0
     };
 
@@ -826,13 +829,13 @@ const App = () => {
           new Date(entry.date).toLocaleDateString('fr-FR'),
           entry.hasOdor ? 'Oui' : 'Non',
           entry.hasOdor ? entry.odorIntensity : '',
-          entry.odorCauses?.includes('Transpiration excessive') ? 'Oui' : 'Non',
-          entry.odorCauses?.includes('Port de foulard/hijab') ? 'Oui' : 'Non',
-          entry.odorCauses?.includes('Shampooing peu fréquent') ? 'Oui' : 'Non',
-          entry.odorCauses?.includes('Excès de sébum') ? 'Oui' : 'Non',
-          entry.odorCauses?.includes('Changements hormonaux') ? 'Oui' : 'Non',
-          entry.odorCauses?.includes('Produit inapproprié') ? 'Oui' : 'Non',
-          entry.odorCauses?.includes('Autre') ? 'Oui' : 'Non',
+          entry.odorCauses?.includes('Excessive perspiration') ? 'Oui' : 'Non',
+          entry.odorCauses?.includes('Wearing headscarf/hijab') ? 'Oui' : 'Non',
+          entry.odorCauses?.includes('Infrequent shampooing') ? 'Oui' : 'Non',
+          entry.odorCauses?.includes('Excess sebum') ? 'Oui' : 'Non',
+          entry.odorCauses?.includes('Hormonal changes') ? 'Oui' : 'Non',
+          entry.odorCauses?.includes('Inappropriate product') ? 'Oui' : 'Non',
+          entry.odorCauses?.includes('Other') ? 'Oui' : 'Non',
           entry.otherCause || '',
           entry.hasSymptoms ? 'Oui' : 'Non',
           entry.hasSymptoms ? entry.itching : '',
@@ -917,6 +920,7 @@ const App = () => {
                 <div className="space-y-2 text-sm">
                   <p>• Utilisez <strong>Panélistes</strong> pour gérer les participants</p>
                   <p>• Utilisez <strong>Données</strong> pour exporter les résultats</p>
+                  <p>• Période d'étude : 57 jours (6 décembre 2025 - 1er février 2026)</p>
                 </div>
               </div>
             </div>
@@ -965,7 +969,7 @@ const App = () => {
                     <tbody className="divide-y">
                       {participants.map(p => {
                         const userEntries = entries.filter(e => e.participantCode === p.code && e.status === 'complete');
-                        const progress = Math.round((userEntries.length / 28) * 100);
+                        const progress = Math.round((userEntries.length / 57) * 100);
                         
                         return (
                           <tr key={p.code} className="hover:bg-gray-50">
@@ -978,7 +982,7 @@ const App = () => {
                                 <div className="flex-1 bg-gray-200 rounded-full h-2 max-w-32">
                                   <div className="bg-blue-500 h-2 rounded-full" style={{ width: `${progress}%` }} />
                                 </div>
-                                <span className="text-sm font-semibold">{userEntries.length}/28</span>
+                                <span className="text-sm font-semibold">{userEntries.length}/57</span>
                               </div>
                             </td>
                             <td className="px-4 py-3">
